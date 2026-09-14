@@ -1,0 +1,30 @@
+{
+  "name": "astra-marketing-template",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "preview": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check:template": "node scripts/check-template.mjs"
+  },
+  "dependencies": {
+    "next": "^15.3.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "typescript": "^5.7.2",
+    "wrangler": "4.130.0"
+  },
+  "overrides": {
+    "postcss": "8.5.28"
+  }
+}

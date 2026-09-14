@@ -1,0 +1,15 @@
+node_modules/
+.next/
+out/
+.wrangler/
+.env*
+.dev.vars*
+.data/
+*.tsbuildinfo
+*credentials*
+*secrets*
+.DS_Store
+*.sqlite*
+*.db
+*.log
+*.pem

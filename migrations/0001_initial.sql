@@ -1,0 +1,3 @@
+CREATE TABLE documents (id TEXT PRIMARY KEY, version INTEGER NOT NULL, data TEXT NOT NULL, last_request TEXT NOT NULL);
+CREATE TABLE receipts (id TEXT PRIMARY KEY, signature TEXT NOT NULL, document_id TEXT NOT NULL);
+CREATE TABLE login_limits (id TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires INTEGER NOT NULL);

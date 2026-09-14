@@ -1,0 +1,26 @@
+'use client';
+import {GoalChart} from './data-visuals';
+import FunnelOkr from './funnel-okr';
+import {useEffect,useState} from 'react';
+import {useBusiness,useBusinessFetch} from './business-context';
+import {metricUnit,type BusinessData} from '@/lib/marketing-business/types';
+import {goalProgress,phaseNames,campaignPhase} from '@/lib/marketing-business/planning';
+const fmt=(n:number|null)=>n===null?'未取得':n.toLocaleString('ja-JP',{maximumFractionDigits:1});
+export default function OkrPanel({onSettings,onWork,onObservation,onFunnels}:{onFunnels:()=>void;onSettings:()=>void;onWork:(goalId:string)=>void;onObservation:()=>void}){
+ const [mode,setMode]=useState(()=>new URLSearchParams(location.search).get('okrView')==='funnels'?'funnels':'goals');
+ function chooseMode(value:string){setMode(value);const u=new URL(location.href);u.searchParams.set('okrView',value);history.replaceState(null,'',u);}
+ const fetch=useBusinessFetch(),business=useBusiness(),[data,setData]=useState<BusinessData|null>(null),[error,setError]=useState(''),[observation,setObservation]=useState(''),[selected,setSelected]=useState(''),[retry,setRetry]=useState(0);
+ useEffect(()=>{const controller=new AbortController();setData(null);setError('');fetch('/api/marketing/plan?view=okr',{signal:controller.signal,cache:'no-store'}).then(async r=>{const b=await r.json();if(!r.ok)throw new Error(b.error);return b.data;}).then(setData).catch(e=>{if(!controller.signal.aborted)setError(e.message);});return()=>controller.abort();},[fetch,retry]);
+ const row=data?.observations.find(o=>o.id===observation)??[...(data?.observations??[])].sort((a,b)=>b.collectedAt.localeCompare(a.collectedAt)||b.end.localeCompare(a.end))[0];
+ const goal=data?.goals.find(g=>g.id===selected);
+ return <section className="mp-okr"><div className="mp-tabs"><button aria-pressed={mode==='goals'} onClick={()=>chooseMode('goals')}>目標と施策</button><button aria-pressed={mode==='funnels'} onClick={()=>chooseMode('funnels')}>ファネル全体</button></div><div className="mp-toolbar"><p>目指す状態から、数値目標と施策のつながりをたどります。</p><button onClick={()=>setRetry(n=>n+1)}>最新の状態を取得</button></div>{error&&<p role="alert" className="ao-error">{error}</p>}{!data&&!error&&<p role="status">保存済みの目標を読み込み中…</p>}{data&&mode==='funnels'&&<FunnelOkr data={data} onWork={onWork} onSettings={onFunnels}/>} {data&&mode==='goals'&&<>
+ <div className="mp-toolbar"><label>進捗を見る観測<select value={row?.id??''} onChange={e=>setObservation(e.target.value)}>{!data.observations.length&&<option value="">観測データがありません</option>}{data.observations.map(o=><option key={o.id} value={o.id}>{o.label}（{o.start}〜{o.end}）</option>)}</select></label><div className="mp-actions"><button onClick={onSettings}>目標を編集</button><button onClick={onObservation}>観測データを登録</button></div></div>
+ {row&&<p className="mp-muted">{row.start}〜{row.end}の流入集団 / {row.days}日観測 / 取得日 {row.collectedAt} / 出典：{row.source}</p>}
+ {!data.goals.length?<div className="mp-empty"><h3>目標のつながりを作りましょう</h3><p>「目指す状態」と「達成する数字」を登録すると、ここに図が現れます。施策をその目標へ結び付けると、何のために取り組むかが見えます。</p><button className="ao-primary" onClick={onSettings}>最初の目標を登録</button></div>:<>
+ <GoalChart goals={data.goals} observation={row}/><div className="mp-map-labels" aria-hidden="true"><span>目指す状態</span><span>達成する数字</span><span>取り組む施策</span></div>
+ <div className="mp-map" aria-label="目指す状態から数値目標、施策へのつながり"><article className="mp-objective"><small>{business.name} / 目指す状態</small><h3>{data.objective||'目指す状態が未登録です'}</h3><span>{data.goals.length}件の数値目標</span></article><ol className="mp-branches">{data.goals.map(g=>{const p=goalProgress(g,row),campaigns=data.campaigns.filter(c=>c.goalId===g.id);return <li className="mp-branch" key={g.id}><button className="mp-goal-node" aria-pressed={selected===g.id} onClick={()=>setSelected(selected===g.id?'':g.id)}><small>数値目標 / {g.owner}</small><strong>{g.title}</strong><span className="mp-value">{fmt(p.current)}{p.current===null?'':metricUnit(g.metric)} <small>目標 {fmt(g.target)}{metricUnit(g.metric)}</small></span><div className="mp-progress" aria-hidden="true"><i style={{width:`${p.bar??0}%`}}/></div><span>{p.value===null?'進捗は未判定':`基準からの改善 ${fmt(p.value)}%`}</span><small>期限 {g.deadline} · 詳細を見る</small></button><ul className="mp-campaign-nodes">{campaigns.length?campaigns.map(c=><li key={c.id}><button className="mp-campaign-node" onClick={()=>onWork(g.id)}><span className={'mp-badge mp-'+campaignPhase(c)}>{phaseNames[campaignPhase(c)]}</span><strong>{c.title}</strong><small>{c.assignee||'担当未登録'} / {c.end}まで</small></button></li>):<li className="mp-no-campaign"><span>施策がまだありません</span><button onClick={()=>onWork(g.id)}>この目標の施策を考える →</button></li>}</ul></li>;})}</ol></div>
+ {goal&&<section className="mp-detail" aria-label="選んだ数値目標の詳細"><div className="mp-toolbar"><h3>{goal.title}</h3><button onClick={()=>setSelected('')}>詳細を閉じる</button></div><p>基準 {fmt(goal.baseline)}{metricUnit(goal.metric)} → 現在 {fmt(goalProgress(goal,row).current)} → 目標 {fmt(goal.target)}{metricUnit(goal.metric)}</p><p>{goalProgress(goal,row).reason??'基準と今回の観測を比較できると確認した数値です。'}</p><p>基準の根拠：{goal.baselineSource}</p><p>今回の根拠：{row?.source||'未取得'}</p><button onClick={()=>onWork(goal.id)}>この目標の実行管理へ</button></section>}
+ <p className="mp-muted">線は登録された目標と施策の対応です。因果関係の証明ではありません。施策の作業完了だけでは数値目標の進捗は増えません。進捗は、比較条件を確認した観測値から計算します。</p>
+ </>}
+ </>}</section>;
+}
