@@ -26,3 +26,27 @@ test('広告側の成果を選択し、異なる行動を足さず、取得が�
 test('1日の実行上限と方針変更後の古い承認を拒否する',async()=>{const x=await fixture(),m=mock();try{x.db.prepare('UPDATE ad_accounts SET policy=?').run(JSON.stringify({...defaultPolicy,enabled:true,maxDailyBudget:20000,maxOperations:1}));await x.call('propose',proposal);await x.call('approve',{changeId:'r1'});await x.call('execute',{changeId:'r1'});await x.call('propose',{...proposal,after:'ACTIVE'});await x.call('approve',{changeId:'r4'});assert.equal((await x.call('execute',{changeId:'r4'})).status,409);assert.equal(m.writes(),1);await x.call('policy',{expectedVersion:1,policy:{...defaultPolicy,enabled:true,maxDailyBudget:20000}});assert.equal((await x.call('execute',{changeId:'r4'})).status,400);assert.equal(m.writes(),1);}finally{m.restore();x.db.close();}});
 test('日別広告実績を同期し、再取得は置換し、別アカウントの広告は拒否する',async()=>{const x=await fixture(),original=globalThis.fetch;let bad=false;globalThis.fetch=async input=>{const path=new URL(String(input)).pathname;if(path.endsWith('/act_123'))return Response.json({id:'act_123',currency:'JPY',timezone_name:'Asia/Tokyo'});if(path.endsWith('/campaigns'))return Response.json({data:[{...object,account_id:bad?'999':'123'}]});if(path.endsWith('/adsets')||path.endsWith('/ads'))return Response.json({data:[]});return Response.json({data:[{date_start:'2026-09-01',ad_id:'3',ad_name:'広告',campaign_id:'101',adset_id:'2',spend:'1200',impressions:'300',clicks:'20',actions:[{action_type:'purchase',value:'2'}]}]});};try{for(let i=0;i<2;i++)assert.equal((await x.call('sync',{start:'2026-09-01',end:'2026-09-02'})).status,200);assert.equal(x.db.prepare('SELECT COUNT(*) n FROM ad_reports').get()!.n,1);const b=await(await ads(new Request('https://astra.test/api/marketing/ads?start=2026-09-01&end=2026-09-02'),x.env,x.owner,'default')).json() as any;assert.equal(b.reports[0].spend,1200);bad=true;assert.equal((await x.call('sync',{start:'2026-09-01',end:'2026-09-02'})).status,400);assert.equal(x.db.prepare('SELECT COUNT(*) n FROM ad_reports').get()!.n,1);}finally{globalThis.fetch=original;x.db.close();}});
 test('自律操作はサーバー内部の委任と操作別許可が必要で、公開APIから偽装できない',async()=>{const x=await fixture(),m=mock();try{await x.call('propose',proposal);assert.equal((await x.call('execute',{changeId:'r1',autonomous:true})).status,400);assert.equal(m.writes(),0);const req=()=>new Request('https://test/',{method:'POST',body:JSON.stringify({action:'execute',accountId:'a',changeId:'r1',requestId:'auto-execute'})});assert.equal((await ads(req(),x.env,x.owner,'default',true)).status,400);x.db.prepare('UPDATE ad_accounts SET policy=?').run(JSON.stringify({...defaultPolicy,enabled:true,maxDailyBudget:20000,autonomousOperations:['pause']}));assert.equal((await ads(req(),x.env,x.owner,'default',true)).status,200);assert.equal(x.stored('r1').status,'succeeded');assert.equal(m.writes(),1);await ads(req(),x.env,x.owner,'default',true);assert.equal(m.writes(),1);}finally{m.restore();x.db.close();}});
+
+test('同期の保存直前に成功したファネル対応付けを上書きしない',async()=>{
+ const x=await fixture(),originalFetch=globalThis.fetch,originalBatch=x.env.DB.batch;try{
+ x.db.prepare("INSERT INTO documents VALUES('business',1,?,'')").run(JSON.stringify({goals:[],funnels:[{id:'f1',source:'ads'}]}));
+ x.db.prepare("INSERT INTO ad_entities VALUES('a','101','campaign',?)").run(JSON.stringify({id:'101',level:'campaign',funnelId:''}));
+ globalThis.fetch=async input=>{const path=new URL(String(input)).pathname;if(path.endsWith('/act_123'))return Response.json({id:'act_123',currency:'JPY',timezone_name:'Asia/Tokyo'});if(path.endsWith('/campaigns'))return Response.json({data:[object]});return Response.json({data:[]});};
+ let mapped=false;x.env.DB.batch=async statements=>{if(!mapped){mapped=true;assert.equal((await x.call('mapping',{entityId:'101',funnelId:'f1'})).status,200);}return originalBatch(statements);};
+ assert.equal((await x.call('sync',{start:'2026-09-01',end:'2026-09-01'})).status,200);
+ assert.equal(JSON.parse(String(x.db.prepare("SELECT data FROM ad_entities WHERE id='101'").get()!.data)).funnelId,'f1');
+ }finally{globalThis.fetch=originalFetch;x.env.DB.batch=originalBatch;x.db.close();}
+});
+
+
+test('媒体の一覧から消えた広告も対応付けと履歴を残し、再出現時に復旧する',async()=>{
+ const x=await fixture(),original=globalThis.fetch;let missing=true;try{
+ x.db.prepare("INSERT INTO ad_entities VALUES('a','101','campaign',?)").run(JSON.stringify({id:'101',level:'campaign',funnelId:'saved-funnel',effectiveStatus:'ACTIVE'}));
+ globalThis.fetch=async input=>{const path=new URL(String(input)).pathname;if(path.endsWith('/act_123'))return Response.json({id:'act_123',currency:'JPY',timezone_name:'Asia/Tokyo'});return Response.json({data:path.endsWith('/campaigns')&&!missing?[object]:[]});};
+ assert.equal((await x.call('sync',{start:'2026-09-01',end:'2026-09-01'})).status,200);
+ let saved=JSON.parse(String(x.db.prepare("SELECT data FROM ad_entities WHERE id='101'").get()!.data));
+ assert.equal(saved.funnelId,'saved-funnel');assert.equal(saved.syncMissing,true);assert.equal(saved.effectiveStatus,'UNAVAILABLE');
+ missing=false;assert.equal((await x.call('sync',{start:'2026-09-01',end:'2026-09-01'})).status,200);
+ saved=JSON.parse(String(x.db.prepare("SELECT data FROM ad_entities WHERE id='101'").get()!.data));assert.equal(saved.funnelId,'saved-funnel');assert.equal(saved.syncMissing,false);assert.equal(saved.effectiveStatus,'ACTIVE');
+ }finally{globalThis.fetch=original;x.db.close();}
+});

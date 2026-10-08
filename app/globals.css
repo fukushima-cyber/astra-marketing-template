@@ -48,9 +48,9 @@
   --space-xl: 24px;
   --space-2xl: 32px;
 
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
   --shadow-panel: 0 1px 2px rgba(16, 23, 33, 0.05), 0 12px 32px rgba(16, 23, 33, 0.06);
   --shadow-control: 0 1px 1px rgba(16, 23, 33, 0.06);
 }
@@ -128,7 +128,7 @@ select:disabled {
   height: 36px;
   place-items: center;
   border: 1px solid var(--color-sidebar-rule);
-  border-radius: var(--radius-sm);
+  border-radius:0;
   background: var(--color-accent);
   color: var(--color-accent-ink);
   font-size: 12px;
@@ -170,7 +170,7 @@ select:disabled {
   justify-content: space-between;
   gap: var(--space-sm);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius:0;
   background: transparent;
   color: var(--color-accent-ink);
   padding: var(--space-xs) var(--space-sm);
@@ -282,7 +282,7 @@ h1 {
   min-width: 220px;
   min-height: 38px;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius:0;
   background: var(--color-surface);
   color: var(--color-ink);
   padding: var(--space-xs) var(--space-sm);
@@ -304,7 +304,7 @@ h1 {
   justify-content: center;
   gap: var(--space-xs);
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius:0;
   background: var(--color-surface);
   color: var(--color-ink);
   padding: var(--space-xs) var(--space-sm);
@@ -365,7 +365,7 @@ h1 {
 .panel {
   min-width: 0;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
+  border-radius:0;
   background: var(--color-surface);
   box-shadow: var(--shadow-panel);
 }
@@ -416,7 +416,7 @@ h1 {
 .metric {
   min-width: 0;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius:0;
   background: var(--color-surface);
   padding: var(--space-sm);
   transition:
@@ -493,7 +493,7 @@ h1 {
   gap: var(--space-sm);
   align-items: end;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-md);
+  border-radius:0;
   background: var(--color-surface-2);
   padding: var(--space-sm);
 }
@@ -523,7 +523,7 @@ h1 {
 .status-select {
   min-height: 38px;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius:0;
   background: var(--color-surface);
   color: var(--color-ink);
   padding: var(--space-xs) var(--space-sm);
@@ -575,7 +575,7 @@ h1 {
   min-height: 24px;
   align-items: center;
   border: 1px solid transparent;
-  border-radius: var(--radius-xs);
+  border-radius:0;
   padding: var(--space-2xs) var(--space-xs);
   font-size: 11px;
   font-weight: 800;
@@ -611,7 +611,7 @@ h1 {
   display: grid;
   gap: var(--space-2xs);
   border: 1px solid var(--color-blue-rule);
-  border-radius: var(--radius-xs);
+  border-radius:0;
   background: var(--color-blue-soft);
   color: var(--color-blue);
   padding: var(--space-xs);
@@ -643,7 +643,7 @@ h1 {
   min-height: 40px;
   border: 1px solid transparent;
   border-bottom: 2px solid transparent;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius:0;
   background: transparent;
   color: var(--color-muted);
   padding: var(--space-xs) var(--space-md);
@@ -671,7 +671,7 @@ h1 {
 
 .tab.active {
   border-color: var(--color-line);
-  border-bottom-color: var(--color-accent);
+  border-bottom-color: var(--color-line);
   background: var(--color-surface);
   color: var(--color-accent);
   font-weight: 800;
@@ -705,7 +705,7 @@ h1 {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius:0;
   background: var(--color-surface);
   color: var(--color-ink);
   padding: var(--space-xs) var(--space-sm);
@@ -735,7 +735,7 @@ h1 {
   max-height: 460px;
   overflow: auto;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius:0;
   background: var(--color-code-bg);
   color: var(--color-code-ink);
   padding: var(--space-md);
@@ -756,7 +756,7 @@ h1 {
   gap: var(--space-sm);
   align-items: start;
   border: 1px solid var(--color-line);
-  border-radius: var(--radius-sm);
+  border-radius:0;
   background: var(--color-surface);
   padding: var(--space-sm);
 }

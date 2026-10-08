@@ -3,10 +3,12 @@ import {can,type Identity} from '../lib/access.ts';
 import {defaultPolicy,validatePolicy,type JobData} from '../lib/autonomy/model.ts';
 import {settings,policy} from './autonomy-store.ts';
 import {seal} from './native.ts';
+import {autonomyBoard} from './autonomy-board.ts';
 const json=(b:unknown,status=200)=>Response.json(b,{status});
 export async function autonomy(r:Request,env:Env,user:Identity,scope:string){
  if(!can(user,scope,'autonomy'))return json({error:'自律運用の閲覧権限がありません。'},403);
  try{const s=await settings(env,scope);if(r.method==='GET'){
+ if(new URL(r.url).searchParams.get('view')==='board')return json(await autonomyBoard(env,scope,!!s&&policy(s).enabled));
  const jobs=(await env.DB.prepare('SELECT id,status,data,created_at,updated_at FROM autonomy_jobs WHERE business_id=? ORDER BY created_at DESC LIMIT 30').bind(scope).all<{id:string;status:string;data:string;created_at:string;updated_at:string}>()).results.map(({data,...j})=>{const d=JSON.parse(data) as JobData;return{...j,summary:d.summary,question:d.question,nextAt:d.nextAt,steps:d.steps,calls:d.calls,tokens:d.tokens,model:d.model};});
  const actions=(await env.DB.prepare('SELECT a.id,a.job_id,a.name,a.status,a.result,a.created_at FROM autonomy_actions a JOIN autonomy_jobs j ON j.id=a.job_id WHERE j.business_id=? ORDER BY a.created_at DESC LIMIT 100').bind(scope).all<{name:string;status:string;result:string}>()).results.map(({result,...a})=>({...a,result:a.name==='model'&&a.status==='done'?'モデルの応答を保存しました。':result.slice(0,12000)}));
  const accounts=(await env.DB.prepare('SELECT id,name,currency,policy FROM ad_accounts WHERE business_id=?').bind(scope).all<{policy:string}>()).results.map(a=>({...a,policy:JSON.parse(a.policy)}));

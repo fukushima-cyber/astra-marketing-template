@@ -1,0 +1,1 @@
+-- Public template: no second business is seeded.

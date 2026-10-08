@@ -1,0 +1,45 @@
+// Local-only integration check; uses an isolated business, never production records.
+import assert from 'node:assert/strict';
+import {observationSignature} from '../lib/marketing-business/types.ts';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE??'playwright');
+const base=process.env.TEST_BASE??'http://127.0.0.1:8787';
+assert.ok(['127.0.0.1','localhost'].includes(new URL(base).hostname));
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const page=await browser.newPage({viewport:{width:1600,height:1000}}),errors=[];
+page.setDefaultTimeout(15000);page.on('dialog',d=>d.accept());
+page.on('pageerror',e=>errors.push(e.message));
+try{
+ await page.goto(base+'/login');await page.getByLabel('メールアドレス',{exact:true}).fill('local-owner@example.test');await page.getByLabel('パスワード',{exact:true}).fill('local-owner-test-password');await page.getByRole('button',{name:'ログイン',exact:true}).click();await page.waitForURL('**/company');
+ const id='planning-'+Date.now(),o={id:'o1',label:'検証用観測',start:'2026-01-01',end:'2026-01-31',days:30,collectedAt:'2026-03-02',source:'ローカル検証',visitors:100,registrations:50,bookings:10,meetings:5,conversions:4,adSpend:100,revenue:200,grossProfit:100};
+ const g={id:'g1',title:'成約を増やす',baseline:2,target:6,metric:'conversions',direction:'increase',deadline:'2026-09-30',owner:'担当',baselineDays:30,baselineSource:'ローカル検証',comparisonConfirmed:true,comparisonObservation:observationSignature(o)};
+ const c={id:'c1',title:'案内文の改善',goalId:'g1',phase:'planned',assignee:'担当A',hypothesis:'理解が進む',change:'案内を見直す',comparison:'比較する',stopRule:'苦情時は停止',start:'2026-09-01',end:'2026-09-30',result:'pending',reason:'',source:'',postIds:[]};
+ const data={version:0,name:'画面検証用',objective:'継続して選ばれる事業にする',goals:[g,{...g,id:'g2',title:'粗利を増やす',metric:'grossProfit',baseline:0,target:200}],observations:[o],campaigns:[c],updatedAt:''};
+ const seed=await page.evaluate(async({id,data})=>{const headers={'Content-Type':'application/json','X-Astra-Business':id};const a=await fetch('/api/marketing/businesses',{method:'POST',headers,body:JSON.stringify({action:'create',id,name:'画面検証用'})});const b=await fetch('/api/marketing/business',{method:'POST',headers,body:JSON.stringify({requestId:crypto.randomUUID(),expectedVersion:0,data})});return [a.status,b.status,await b.text()];},{id,data});assert.equal(seed[0],200);assert.equal(seed[1],200,seed[2]);
+ await page.goto(base+'/marketing?businessId='+id+'&panel=improvements');
+ await page.getByRole('button',{name:'改善案を追加',exact:true}).click();
+ await page.getByLabel('改善案の名前',{exact:true}).fill('本文の改善テスト');
+ await page.getByLabel('仮説',{exact:true}).fill('説明を具体的にする');
+ await page.getByLabel('変更前',{exact:true}).fill('旧文');
+ await page.getByLabel('作成するもの',{exact:true}).selectOption('create_post_draft');
+ await page.getByLabel('作成する投稿本文',{exact:true}).fill('具体的な案内文');
+ await page.getByLabel('停止条件',{exact:true}).fill('問題があれば停止');
+ await page.getByLabel('根拠の出典',{exact:true}).fill('ローカル検証');
+ await page.getByLabel('根拠の数字・説明',{exact:true}).fill('未計測のため検証案として登録');
+ await page.getByRole('button',{name:'改善案を保存',exact:true}).click();
+ await page.locator('.im-case').filter({hasText:'本文の改善テスト'}).click();
+ await page.getByRole('button',{name:'この内容を承認',exact:true}).click();
+ await page.getByRole('button',{name:'設定した範囲で作成する',exact:true}).click();
+ await page.getByRole('button',{name:'作成したSNS下書きを見る',exact:true}).waitFor();
+ await page.getByLabel('実際に開始した記録・出典',{exact:true}).fill('ローカルで実施確認');
+ await page.getByRole('button',{name:'実施を記録して観測へ',exact:true}).click();
+ await page.getByLabel('結果と判断理由',{exact:true}).fill('継続して観測');
+ await page.getByLabel('実績の出典',{exact:true}).fill('検証記録');
+ await page.getByRole('button',{name:'振り返りを保存',exact:true}).click();
+ await page.locator('.im-case').filter({hasText:'振り返り完了'}).waitFor();
+ await page.reload();await page.locator('.im-case').filter({hasText:'振り返り完了'}).waitFor();
+ await page.locator('.im-case').first().click();await page.screenshot({path:'.data/improvements-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ await page.screenshot({path:'.data/improvements-mobile.png',fullPage:true});
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'mobile must fit');
+ assert.deepEqual(errors,[]);console.log('PASS: UI proposal approval preparation observation review persistence and mobile width');
+}catch(e){console.log((await page.locator('body').innerText()).slice(-7000));await page.screenshot({path:'.data/improvements-failure.png',fullPage:true});throw e;}finally{await browser.close();}

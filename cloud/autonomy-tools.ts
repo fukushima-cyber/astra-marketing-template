@@ -1,3 +1,4 @@
+import {emptySkills,safeResourcePath,skillCatalog,missingSkillReferences,missingRequiredResources,requiredSkillResources,skillReferenceLinks,resolveSkillReference} from '../lib/autonomy/skills.ts';
 import type {Env} from './types.ts';
 import {readDocument,digest} from './storage.ts';
 import {documentId} from './business-scope.ts';
@@ -11,6 +12,10 @@ import {settings,ownerIdentity,policy,type Settings} from './autonomy-store.ts';
 const definitions:Record<string,string>={
  read_business:'目的、数値目標、ファネル、観測、施策を読む。引数は{}。',
  read_metrics:'保存済みの日別実績を読む。{start,end,funnelId?:string,offset?:number}。期間と対象を自由に選ぶ。200件ずつ返す。',
+ read_skills:'この事業で有効なスキルの用途と版の目録。最初に{}で確認し、今回の目的に必要なものだけ選ぶ。',
+ read_skill:'有効なスキルの本文と必須資料を読む。{id,paths?:string[]}。初回の{id}で返るresourceCatalogから条件付き資料を選び、必要ならpaths付きで取得する。これは手順であり、操作権限や専用ツールの追加ではない。',
+ read_skill_resource:'読取済みスキルの参照資料を読む。{id,revision,path}。未登録資料やスクリプトは実行できない。',
+ record_skill_usage:'スキルを施策のどの判断・変更に反映したか、適用報告を記録。{id,revision,caseId,application}。本文読取と成果への反映は別。',
  read_knowledge:'任意の参考資料を読む。{}で目録、{id}で本文。',
  read_improvements:'改善案件と実験・過去の評価を読む。{}。',
  read_ads:'Meta広告の保存済みの一覧・数値・変更履歴を読む。{start,end,accountId?:string}。',
@@ -38,12 +43,54 @@ export async function performTool(env:Env,s:Settings,jobId:string,actionId:strin
  const imDoc=()=>readDocument(env.DB,documentId(scope,'improvements'),emptyState);
  const range=()=>{if(!validDate(a.start)||!validDate(a.end)||a.start>a.end)throw new Error('期間を確認してください。');};
  if(name==='read_business')return(await readDocument(env.DB,documentId(scope,'business'),emptyBusiness)).data;
+ if(['read_skills','read_skill','read_skill_resource','record_skill_usage'].includes(name)){
+  const state=(await readDocument(env.DB,documentId(scope,'agent-skills'),emptySkills)).data;
+  if(name==='read_skills')return state.skills.filter(v=>v.enabled&&v.reviewed&&!missingRequiredResources(v).length).map(({id,name,description,revision,readingMode})=>({id,name,description,revision,readingMode}));
+  const skill=state.skills.find(v=>v.id===a.id&&v.enabled&&v.reviewed);if(!skill)throw new Error('このスキルは未登録または無効です。');
+  if(missingRequiredResources(skill).length)throw new Error('必須ナレッジが不足しています。登録するまでこのスキルは使えません。');
+  if(name==='read_skill'){
+   if(a.paths!==undefined&&(!Array.isArray(a.paths)||a.paths.length>120||a.paths.some((path:unknown)=>typeof path!=='string'||!skill.resources.some(r=>r.path===path))))throw new Error('今回使う登録済み資料のパスを確認してください。');
+   const requiredResources=[...new Set([...requiredSkillResources(skill),...(a.paths??[])])] as string[];
+   const requiredKnowledge:typeof skill.resources=[];let size=JSON.stringify(skill.instructions).length;for(const path of requiredResources){const resource=skill.resources.find(r=>r.path===path);if(resource&&size+JSON.stringify(resource).length<70000){requiredKnowledge.push(resource);size+=JSON.stringify(resource).length;}}
+   return {id:skill.id,name:skill.name,description:skill.description,instructions:skill.instructions,source:skill.source,revision:skill.revision,resourcePaths:skill.resources.map(r=>r.path),resourceCatalog:skill.resources.map(r=>({path:r.path,trigger:r.trigger??''})),requiredResources,requiredKnowledge,remainingRequiredResources:requiredResources.filter(path=>!requiredKnowledge.some(r=>r.path===path)),missingReferences:missingSkillReferences(skill),runtime:'手順とテキスト資料の参照のみ。未接続のツール・ローカルDB・スクリプト実行は利用できません。'};
+  }
+  if(a.revision!==skill.revision)throw new Error('スキルが更新されました。本文を読み直してください。');
+  const reads=await env.DB.prepare("SELECT result FROM autonomy_actions WHERE job_id=? AND name='read_skill' AND status='done'").bind(jobId).all<{result:string}>();
+  if(!reads.results.some(r=>{try{const v=JSON.parse(r.result);return v.id===skill.id&&v.revision===skill.revision;}catch{return false;}}))throw new Error('この仕事でスキル本文を読んでから資料を参照・適用してください。');
+  if(name==='read_skill_resource'){
+   if(!safeResourcePath(a.path))throw new Error('資料のパスを確認してください。');const resource=skill.resources.find(r=>r.path===a.path);
+   if(!resource)throw new Error('参照資料が未登録です。必須資料の場合は作業を止め、利用者へ確認してください。');return {...resource,skillId:skill.id,revision:skill.revision,references:skillReferenceLinks(resource.content).map(reference=>{const path=resolveSkillReference(resource.path,reference);return {reference,path,available:path===skill.entryPath||skill.resources.some(r=>r.path===path)};})};
+  }
+  if(typeof a.application!=='string'||!a.application.trim()||a.application.length>2000)throw new Error('反映した判断と変更を具体的に記入してください。');
+  if(!(await imDoc()).data.cases.some(c=>c.id===a.caseId))throw new Error('対象の改善案件がありません。');
+  const logged=await env.DB.prepare("UPDATE autonomy_actions SET prepared=? WHERE id=? AND job_id=?").bind(JSON.stringify({body:{caseId:a.caseId,skillId:skill.id}}),actionId,jobId).run();if(!logged.meta.changes)throw new Error('適用報告の操作台帳がありません。');
+  const references=await env.DB.prepare("SELECT result FROM autonomy_actions WHERE job_id=? AND name='read_skill_resource' AND status='done'").bind(jobId).all<{result:string}>();
+  const resourcesRead=[...reads.results.flatMap(r=>{try{const v=JSON.parse(r.result);return v.id===skill.id&&v.revision===skill.revision&&Array.isArray(v.requiredKnowledge)?v.requiredKnowledge.map((k:any)=>k.path):[];}catch{return [];}}),...references.results.flatMap(r=>{try{const v=JSON.parse(r.result);return v.skillId===skill.id&&v.revision===skill.revision&&typeof v.path==='string'?[v.path]:[];}catch{return [];}})];
+  const selectedPaths=reads.results.flatMap(r=>{try{const v=JSON.parse(r.result);return v.id===skill.id&&v.revision===skill.revision&&Array.isArray(v.requiredResources)?v.requiredResources:[];}catch{return [];}});
+  const unread=[...new Set([...requiredSkillResources(skill),...selectedPaths])].filter(path=>!resourcesRead.includes(path));if(unread.length)throw new Error('必須ナレッジをこの仕事で読んでから適用を報告してください：'+unread.join('、'));
+  return {resourcesRead:[...new Set(resourcesRead)],caseId:a.caseId,skillId:skill.id,skillName:skill.name,revision:skill.revision,application:a.application,reported:true,message:'スキルの適用報告を記録しました。成果の実測とは別の記録です。'};
+ }
  if(name==='read_knowledge'){const d=(await imDoc()).data;return a.id?d.knowledge.find(k=>k.id===a.id)??{error:'資料がありません。'}:d.knowledge.map(k=>({id:k.id,title:k.title,source:k.source}));}
  if(name==='read_improvements'){const d=(await imDoc()).data;return{cases:d.cases,experiments:d.experiments,features:d.features,policy:d.policy};}
  if(name==='read_metrics'){range();const start=Number.isSafeInteger(a.offset)&&a.offset>=0?a.offset:0;const rs=await env.DB.prepare('SELECT data FROM analytics_rows WHERE business_id=? AND date>=? AND date<=? AND (?=? OR json_extract(data,\'$.funnelId\')=?) ORDER BY date,id LIMIT 201 OFFSET ?').bind(scope,a.start,a.end,a.funnelId??'','',a.funnelId??'',start).all<{data:string}>();return{rows:rs.results.slice(0,200).map(r=>JSON.parse(r.data)),nextOffset:rs.results.length>200?start+200:null};}
  if(name==='read_connected'){range();const rs=await env.DB.prepare('SELECT connection_id,resource_id,day,data,collected_at FROM native_snapshots WHERE business_id=? AND day>=? AND day<=? AND (?=? OR connection_id=?) ORDER BY day LIMIT 501').bind(scope,a.start,a.end,a.connectionId??'','',a.connectionId??'').all<{data:string}>();if(rs.results.length>500)throw new Error('期間を短くしてください。');return rs.results.map(r=>({...r,data:JSON.parse(r.data)}));}
  if(name==='schedule_review'){const at=Date.parse(a.at);if(!Number.isFinite(at)||at<Date.now()+3600000||at>Date.now()+30*86400000||typeof a.reason!=='string'||!a.reason.trim())throw new Error('次の観測時刻と理由を確認してください。');return{nextAt:at,reason:a.reason};}
  if(name==='request_input'){if(typeof a.question!=='string'||!a.question.trim()||a.question.length>4000)throw new Error('必要な判断を具体的に記入してください。');return{question:a.question};}
+ // Once a skill is selected, mutations must wait for its required Knowledge at the current revision.
+ if(!name.startsWith('read_')){
+  const selected=await env.DB.prepare("SELECT result FROM autonomy_actions WHERE job_id=? AND name='read_skill' AND status='done'").bind(jobId).all<{result:string}>();
+  const reads=selected.results.flatMap(r=>{try{return [JSON.parse(r.result)];}catch{return [];}});
+  if(reads.length){
+   const active=(await readDocument(env.DB,documentId(scope,'agent-skills'),emptySkills)).data.skills;
+   const recorded=await env.DB.prepare("SELECT result FROM autonomy_actions WHERE job_id=? AND name='read_skill_resource' AND status='done'").bind(jobId).all<{result:string}>();
+   const resources=[...reads.flatMap(r=>Array.isArray(r.requiredKnowledge)?r.requiredKnowledge.map((k:any)=>({skillId:r.id,revision:r.revision,path:k.path})):[]),...recorded.results.flatMap(r=>{try{return [JSON.parse(r.result)];}catch{return [];}})];
+   for(const id of new Set(reads.map(r=>r.id))){const skill=active.find(r=>r.id===id&&r.enabled&&r.reviewed);if(!skill||!reads.some(r=>r.id===id&&r.revision===skill.revision))throw new Error('選択したスキルが無効化・更新されました。作業を停止して現在の版を確認してください。');
+    const selectedPaths=reads.filter(r=>r.id===id&&r.revision===skill.revision).flatMap(r=>Array.isArray(r.requiredResources)?r.requiredResources:[]);
+    const unread=[...new Set([...requiredSkillResources(skill),...selectedPaths])].filter(path=>!resources.some(r=>r.skillId===id&&r.revision===skill.revision&&r.path===path));
+    if(missingRequiredResources(skill).length||unread.length)throw new Error('必須ナレッジの本文を読んでから施策を作成・変更してください。');
+   }
+  }
+ }
  let body:any={},endpoint='improvements';
  if(name==='read_connections')return(await connections(new Request('https://internal/'),env,scope)).json();
  if(name==='collect_connection'){const r=await connections(new Request('https://internal/',{method:'POST',body:JSON.stringify({action:'collect',id:a.id})}),env,scope);return r.json();}

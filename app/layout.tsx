@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./company/company.css";
+import "./components/dashboard-ui.css";
 import Session from "./company/session";
 
 export const metadata: Metadata = {

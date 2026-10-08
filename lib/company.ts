@@ -2,7 +2,7 @@ export const companyMetrics = {
   revenue: {label: '確定売上', unit: '円'},
   payments: {label: '入金', unit: '円'},
   refunds: {label: '返金', unit: '円'},
-  cost: {label: '集客費用', unit: '円'},
+  cost: {label: '広告費', unit: '円'},
   sales: {label: '成約', unit: '件'},
   registrations: {label: '登録数', unit: '件'},
 } as const;
@@ -13,7 +13,7 @@ export type CompanyMetrics = Record<CompanyMetric, number | null> &
   };
 export type CompanyDay = CompanyMetrics & {date: string};
 export type CompanyBusiness = {
-  id: string; name: string; metrics: CompanyMetrics | null;
+  id: string; name: string; kind: import('./business').BusinessKind; metrics: CompanyMetrics | null;
   daily: CompanyDay[] | null; restrictedProjects: boolean; objective: string | null;
   goals: {id: string; title: string; target: number; deadline: string}[];
   pendingImprovements: number | null;

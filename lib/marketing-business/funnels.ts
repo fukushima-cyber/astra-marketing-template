@@ -1,15 +1,16 @@
+import {acquisitionChannelNames,revenueModelNames,type AcquisitionChannel,type RevenueModel} from '../business.ts';
 export type MarketingProject={id:string;name:string;product:string;objective:string};
 export type FunnelStage={position?:{x:number;y:number};id:string;name:string;action:string;metric:string;url:string};
 export type FunnelConnection={id:string;from:string;to:string};
-export type ProjectFunnel={connections?:FunnelConnection[];id:string;projectId:string;name:string;source:'sns'|'ads'|'other';medium:string;status:'draft'|'active'|'paused';goalIds:string[];notes:string;stages:FunnelStage[]};
-export const sourceNames={sns:'SNS流入',ads:'広告流入',other:'その他の流入'};
+export type ProjectFunnel={connections?:FunnelConnection[];id:string;projectId:string;name:string;source:AcquisitionChannel;revenueModel?:RevenueModel;medium:string;status:'draft'|'active'|'paused';goalIds:string[];notes:string;stages:FunnelStage[]};
+export const sourceNames=acquisitionChannelNames;
 export function validFunnelRegistry(projects:MarketingProject[],funnels:ProjectFunnel[],goalIds:string[]):boolean{
  const str=(v:unknown,max=2000):v is string=>typeof v==='string'&&v.length<=max;
  const named=(v:unknown):v is string=>str(v,100)&&!!v.trim();
  const list=(v:unknown,max:number):v is {id:string}[]=>Array.isArray(v)&&v.length<=max&&v.every(x=>x&&named(x.id))&&new Set(v.map(x=>x.id)).size===v.length;
  if(!list(projects,100)||!list(funnels,500))return false;
  if(projects.some(p=>!named(p.name)||!str(p.product)||!str(p.objective)))return false;
- return funnels.every(f=>projects.some(p=>p.id===f.projectId)&&named(f.name)&&Object.hasOwn(sourceNames,f.source)&&str(f.medium,100)&&['draft','active','paused'].includes(f.status)&&str(f.notes)&&Array.isArray(f.goalIds)&&f.goalIds.every(id=>goalIds.includes(id))&&list(f.stages,30)&&f.stages.length>=2&&validConnections(f)&&f.stages.every(s=>{if(s.position&&(!Number.isFinite(s.position.x)||!Number.isFinite(s.position.y)||s.position.x<0||s.position.y<0||s.position.x>3000||s.position.y>6000))return false;if(!named(s.name)||!str(s.action)||!named(s.metric)||!str(s.url))return false;if(!s.url)return true;try{const u=new URL(s.url);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password;}catch{return false;}}));
+ return funnels.every(f=>projects.some(p=>p.id===f.projectId)&&named(f.name)&&(f.revenueModel===undefined||Object.hasOwn(revenueModelNames,f.revenueModel))&&Object.hasOwn(sourceNames,f.source)&&str(f.medium,100)&&['draft','active','paused'].includes(f.status)&&str(f.notes)&&Array.isArray(f.goalIds)&&f.goalIds.every(id=>goalIds.includes(id))&&list(f.stages,30)&&f.stages.length>=2&&validConnections(f)&&f.stages.every(s=>{if(s.position&&(!Number.isFinite(s.position.x)||!Number.isFinite(s.position.y)||s.position.x<0||s.position.y<0||s.position.x>3000||s.position.y>6000))return false;if(!named(s.name)||!str(s.action)||!named(s.metric)||!str(s.url))return false;if(!s.url)return true;try{const u=new URL(s.url);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password;}catch{return false;}}));
 }
 
 export function connectionsFor(f:ProjectFunnel):FunnelConnection[]{return f.connections??f.stages.slice(1).map((s,i)=>({id:`legacy-${s.id}`,from:f.stages[i].id,to:s.id}));}

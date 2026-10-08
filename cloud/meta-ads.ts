@@ -1,3 +1,4 @@
+import {creativeImageUrl} from '../lib/dashboard-model.ts';
 import type {Entity,Level,Report} from '../lib/ads/model.ts';
 const VERSION='v26.0';
 const id=(v:string)=>{if(!/^(?:act_)?\d+$/.test(v))throw new Error('広告の識別番号が不正です。');return v;};
@@ -16,6 +17,13 @@ const fields=(level:Level)=>'id,account_id,name,status,effective_status,updated_
 const integer=(v:any)=>v==null?null:/^\d+$/.test(String(v))&&Number.isSafeInteger(Number(v))?Number(v):null;
 export function entity(raw:any,level:Level,externalId:string):Entity{if(String(raw.account_id)!==externalId.replace(/^act_/,''))throw new MetaError('別の広告アカウントの対象です。');return{id:id(String(raw.id)),accountId:externalId,name:String(raw.name??raw.id),level,campaignId:level==='campaign'?String(raw.id):String(raw.campaign_id??''),adsetId:level==='adset'?String(raw.id):String(raw.adset_id??''),status:String(raw.status??''),effectiveStatus:String(raw.effective_status??''),dailyBudget:integer(raw.daily_budget),lifetimeBudget:integer(raw.lifetime_budget),updatedTime:String(raw.updated_time??'')};}
 export async function entities(token:string,externalId:string){const rows:Entity[]=[];for(const level of ['campaign','adset','ad'] as Level[]){for(const raw of await list(token,id(externalId)+'/'+({campaign:'campaigns',adset:'adsets',ad:'ads'}[level]),{fields:fields(level)}))rows.push(entity(raw,level,externalId));}return rows;}
+export async function creativePreviews(token:string,externalId:string){
+ const previews=new Map<string,NonNullable<Entity['creative']>>();
+ for(const raw of await list(token,id(externalId)+'/ads',{fields:'id,creative{id,name,thumbnail_url,image_url,video_id}'})){
+ const c=raw.creative;if(!c||typeof c.id!=='string')continue;
+ previews.set(id(String(raw.id)),{id:id(c.id),name:String(c.name??''),thumbnailUrl:creativeImageUrl(c.thumbnail_url),imageUrl:creativeImageUrl(c.image_url),...(typeof c.video_id==='string'?{videoId:id(c.video_id)}:{})});
+ }return previews;
+}
 export async function readEntity(token:string,externalId:string,entityId:string,level:Level){return entity(await meta(token,id(entityId),{fields:fields(level)}),level,externalId);}
 const decimal=(v:any)=>v==null?null:Number.isFinite(Number(v))&&Number(v)>=0?Number(v):null;
 const actions=(v:any)=>Object.fromEntries((Array.isArray(v)?v:[]).filter(v=>typeof v.action_type==='string'&&decimal(v.value)!==null).map(v=>[v.action_type,Number(v.value)]));

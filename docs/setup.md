@@ -1,60 +1,43 @@
 # セットアップ
 
-この手順では新しい D1 を作成します。既存運用データを移行・削除する手順ではありません。
+新しい空のSupabaseとCloudflare Workerへ導入する手順です。このテンプレートから既存の本番データを復元・移行しません。
 
-## 1. インストールと接続
+## Supabase
+
+1. 自分のSupabaseプロジェクトを用意し、SQLエディターで `supabase/migrations/` のSQLをファイル名の順に実行します。`astra` は非公開スキーマです。ブラウザにはDBキーや接続文字列を渡しません。
+2. 新規導入時だけ `templates/initialize-supabase.sql` を実行します。会社と最初の空の事業を作り、ユーザーや実績は登録しません。
+3. アプリ専用のログインユーザーを作り、`astra_runtime` の権限を与えてください。管理者・service_roleの接続情報をWorkerへ渡さず、SQLエディターから安全に設定します。パスワードは自分で生成し、ソースに記載しません。専用接続は `search_path=astra,extensions,pg_catalog` を設定します。
+4. Supabaseの接続画面で専用ユーザーの接続情報を確認します。TLSと証明書検証を有効にしてください。[Supabase接続ガイド](https://supabase.com/docs/guides/database/connecting-to-postgres)を参照してください。
+
+## Cloudflare
+
+`npm ci` と `npx wrangler login` を実行し、自分の専用DB接続を使ってHyperdriveを作成します。[Hyperdriveの設定](https://developers.cloudflare.com/hyperdrive/get-started/)に従い、クエリーキャッシュを無効、最大接続数を5に設定してください。接続文字列を共有ログやシェル履歴へ残さないでください。
+
+`wrangler.jsonc` のHyperdrive IDを自分のIDへ置き換えます。Worker名も自分の環境に合わせます。`docs/data-safety-manifest.json` の `supabase.projectId` と `supabase.hyperdriveId` を同じ環境の値へ変更します。複数のCloudflareアカウントを使う場合は、設定とmanifestの両方へ `account_id` / `accountId` を揃えてください。
+
+自分の環境を設定した後は `check:template` が失敗するのが正常です。配布前の空状態を検査するコマンドです。導入後は `npm run check:data-safety` で保存先と適用済みSQLのハッシュを確認します。既存データを持つ環境のmanifestを別の保存先へ安易に書き換えないでください。
+
+ローカル実行ではHyperdriveの公式ガイドに従い、専用接続文字列をローカル開発用環境変数で指定してください。公開の設定ファイルへ保存しません。
+
+## キーと初回登録
+
+自分で生成した十分に長い `SESSION_SECRET` と、ランダム32バイトをBase64にした `CONNECTOR_KEY` を、それぞれ `npx wrangler secret put SESSION_SECRET` / `npx wrangler secret put CONNECTOR_KEY` から登録します。既存ユーザーがいる環境のSESSION_SECRETを無計画に交換しないでください。
 
 ```sh
-npm ci
-npx wrangler login
-npx wrangler d1 create astra-marketing-template
-```
-
-出力された `database_id` を `wrangler.jsonc` の同じ項目へ設定します。複数のアカウントを持つ場合は自分の `account_id` も設定してください。Worker 名・D1 名は自分の環境に合わせて変更できます。初期設定のゼロの UUID はプレースホルダーです。
-
-## 2. ローカル環境
-
-以下は新しいローカル専用キーを、表示せず `.dev.vars` に保存します。既存ファイルがある場合は上書きせず停止します。
-
-```sh
-node --input-type=module -e 'import {randomBytes} from "node:crypto"; import {writeFileSync} from "node:fs"; writeFileSync(".dev.vars", `SESSION_SECRET=${randomBytes(32).toString("hex")}\nCONNECTOR_KEY=${randomBytes(32).toString("base64")}\n`, {flag:"wx",mode:0o600});'
-npx wrangler d1 migrations apply astra-marketing-template --local
+npm run check:data-safety
+npm test
 npm run build
-npm run preview
+npm run deploy
 ```
 
-別ターミナルで初回登録リンクを作成します。
+デプロイ後、自分の専用接続文字列を `ASTRA_BACKUP_DB_URL`、自分の公開先のHTTPS originを `APP_URL` として安全に環境変数へ設定し、`node scripts/owner-invite.mjs` を実行します。生成される `.data/owner-registration.md` の非公開リンクから全体管理者を登録します。接続文字列をコマンド引数やGitへ書かないでください。既存の所有者の本人復旧だけは `--recover` を使います。
 
-```sh
-D1_DATABASE=astra-marketing-template node scripts/owner-invite.mjs --local
-```
+## 接続とAI
 
-`.data/local-owner-registration.md` のリンクを開き、自分の表示名・メール・パスワードで登録します。リンクは他の人に共有しないでください。グラフは自分でデータを登録するまで空です。
+「外部サービス連携」に広告・SNS・UTAGE・計測をまとめています。「商品・売上」で商材と売上を記帳し、「案件・販売導線」「目標設定」で事業の導線を登録します。
 
-## 3. 本番環境
+「AI設定」でモデルと実行範囲を登録し、広告の停止・再開・日予算変更はMeta側の許可範囲も設定します。初期状態で外部変更やAIの仕事を開始しません。AIモデルや外部サービスにはそれぞれの利用料金・API利用条件が適用されます。ChatGPT広告とDotは、このテンプレートだけで接続・稼働するものではありません。
 
-ローカル用とは別のランダムキーをパスワードマネージャー等で生成し、以下のプロンプトから登録します。`SESSION_SECRET` は十分に長いランダム値、`CONNECTOR_KEY` はランダムな 32 バイトを Base64 化した値です。キーをソースに書かないでください。
+## バックアップ
 
-```sh
-npx wrangler secret put SESSION_SECRET
-npx wrangler secret put CONNECTOR_KEY
-npx wrangler d1 migrations apply astra-marketing-template --remote
-npm run build
-npm run deploy -- --keep-vars
-```
-
-デプロイ結果の自分の URL を `APP_URL` に指定します。末尾のスラッシュやパスは付けません。
-
-```sh
-APP_URL=https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev D1_DATABASE=astra-marketing-template node scripts/owner-invite.mjs
-```
-
-`.data/owner-registration.md` のリンクで全体管理者を登録します。本人の復旧リンクが必要な場合だけ同じコマンドに `--recover` を付けます。新規所有者の追加ではありません。
-
-## 4. データと外部連携
-
-「設定」で案件・ファネル・目標を登録し、「実績の取込」で CSV をプレビューして保存します。CSV の空欄は未取得、`0` は実測のゼロです。列順はテンプレートを維持してください。
-
-SNS・UTAGE・広告は各設定画面で接続します。自律運用のモデル接続は「Astra・モデル」で利用可能なモデル名と API キーを設定します。改善・診断のモデル機能では `ASTRA_OPENAI_KEY` secret と `ASTRA_MODEL` Worker 変数を使用します。自動スケジュールは初期テンプレートでは有効化していません。
-
-設定した外部変更の権限は、実際の広告・サービスに作用します。自分の運用範囲に合わせて設定してください。
+専用接続を環境変数 `ASTRA_BACKUP_DB_URL` に安全に設定し、`npm run backup:database` を実行します。`.data/backups` は700、ファイルは600で保存されます。本文・接続文字列・顧客データを公開しないでください。`lib/backup/validate.ts` の `validateBackup` で全テーブルの件数とハッシュを検証できます。復元スクリプトは公開版に含めず、バックアップを本番へ自動投入しません。

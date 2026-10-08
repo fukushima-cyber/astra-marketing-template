@@ -1,11 +1,11 @@
 import {validDate} from '../analytics/model.ts';
 export type Day={date:string;pv:number|null;uu:number|null;registrations:number|null;sales:number|null;revenue:number|null};
 export type Page={id:string;funnelId:string;step:string;name:string;payment:boolean;totals:Omit<Day,'date'>;daily:Day[]};
-export type Account={id:string;platform:string;handle:string;displayName:string|null;status:string;series:{date:string;followers:number|null;impressions:number|null}[]};
+export type Account={id:string;platform:string;handle:string;displayName:string|null;status:string;series:{date:string;followers:number|null;impressions:number|null;reach?:number|null;profileViews?:number|null;interactions?:number|null;engagedAccounts?:number|null;mediaCount?:number|null}[]};
 export type SourceGroup={id:string;displayName:string;funnelIds:string[];status:string;series:{date:string;pv:number|null;uu:number|null;registrationCount:number|null}[]};
 export type Catalog={accounts:Account[];groups:SourceGroup[];globalEnabled:boolean;fetchedAt:string;errors:string[]};
 export type Links={version:number;groups:Record<string,string[]>};
-export type ConnectedResult={pages:Page[];failures:{funnelId:string;message:string}[];collectedAt:string};
+export type ConnectedResult={cached?:boolean;coverage?:string[];pages:Page[];failures:{funnelId:string;message:string}[];collectedAt:string};
 export const n=(v:unknown):number|null=>typeof v==='number'&&Number.isFinite(v)&&v>=0?v:null;
 const obj=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{};
 const str=(v:unknown)=>typeof v==='string'?v.slice(0,1000):'';

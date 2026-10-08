@@ -1,8 +1,9 @@
+import {acquisitionChannelNames,type AcquisitionChannel} from '../business.ts';
 import type { BusinessData } from '../marketing-business/types.ts';
 import type { ProjectFunnel } from '../marketing-business/funnels.ts';
-export const measures={cost:'集客費用',revenue:'確定売上',payments:'入金',refunds:'返金',registrations:'登録件数',sales:'成約件数'} as const;
+export const measures={cost:'広告費',revenue:'確定売上',payments:'入金',refunds:'返金',registrations:'登録件数',sales:'成約件数'} as const;
 export type Measure=keyof typeof measures;
-export type Fact={id:string;source:string;externalId:string;date:string;projectId:string;funnelId:string;sourceType:'sns'|'ads'|'other';platform:string;content:string;angle:string;format:string;definition:string;collectedAt:string;values:Record<Measure,number|null>;stageCounts:Record<string,number|null>;funnel:ProjectFunnel};
+export type Fact={id:string;source:string;externalId:string;date:string;projectId:string;funnelId:string;sourceType:AcquisitionChannel;platform:string;content:string;angle:string;format:string;definition:string;collectedAt:string;values:Record<Measure,number|null>;stageCounts:Record<string,number|null>;funnel:ProjectFunnel};
 export type FactInput=Omit<Fact,'id'|'funnel'>;
 export type Filter={start:string;end:string;projectId:string;sourceType:string;platform:string;funnelId:string};
 export type Axis='projectId'|'platform'|'funnelId'|'content'|'angle'|'format'|'date'|'sourceType';
@@ -13,7 +14,7 @@ export function validateFact(input:unknown,business:BusinessData):FactInput{
  if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('実績の形式が不正です。');const v=input as FactInput;
  if(!text(v.source,100)||!v.source.trim()||!text(v.externalId,150)||!v.externalId.trim()||!validDate(v.date)||!validDate(v.collectedAt)||v.collectedAt<v.date||!business.projects?.some(p=>p.id===v.projectId))throw new Error('出典・元データID・日付・プロジェクトを確認してください。');
  const funnel=business.funnels?.find(f=>f.id===v.funnelId&&f.projectId===v.projectId);
- if(!funnel||!['sns','ads','other'].includes(v.sourceType)||funnel.source!==v.sourceType||!text(v.platform,100)||!v.platform.trim()||!text(v.content,200)||!text(v.angle,200)||!text(v.format,100)||!text(v.definition,2000)||!v.definition.trim())throw new Error('ファネル・媒体・集計定義を確認してください。');
+ if(!funnel||!Object.hasOwn(acquisitionChannelNames,v.sourceType)||funnel.source!==v.sourceType||!text(v.platform,100)||!v.platform.trim()||!text(v.content,200)||!text(v.angle,200)||!text(v.format,100)||!text(v.definition,2000)||!v.definition.trim())throw new Error('ファネル・媒体・集計定義を確認してください。');
  if(!v.values||typeof v.values!=='object'||Array.isArray(v.values))throw new Error('実績値が不正です。');
  const values={} as Fact['values'];for(const key of Object.keys(measures) as Measure[]){const n=v.values[key];if(n!==null&&(typeof n!=='number'||!Number.isFinite(n)||n<0||n>1e12||(['registrations','sales'].includes(key)&&!Number.isSafeInteger(n))))throw new Error('実績は0以上、未取得は空欄にしてください。');values[key]=n;}
  if(!v.stageCounts||typeof v.stageCounts!=='object'||Array.isArray(v.stageCounts)||Object.keys(v.stageCounts).some(id=>!funnel.stages.some(s=>s.id===id)))throw new Error('ファネルの段階が一致しません。');

@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+const base=process.env.TEST_BASE??'http://127.0.0.1:8787';
+const password=process.env.TEST_PASSWORD;
+const email=process.env.TEST_EMAIL;
+assert.ok(password&&email,'Set TEST_EMAIL and TEST_PASSWORD for a designated test account');
+const api='/api/marketing/business';
+const call=(p,options={})=>fetch(base+p,{redirect:'manual',...options});
+assert.equal((await call(api)).status,401);
+assert.equal((await call('/marketing')).status,303);
+let r=await call('/login',{method:'POST',headers:{origin:base,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({email,password})});
+assert.equal(r.status,303);const cookie=r.headers.get('set-cookie').split(';')[0];
+const headers={cookie,origin:base,'Content-Type':'application/json'};
+r=await call('/marketing',{headers});assert.equal(r.status,200);assert.match(await r.text(),/会社ダッシュボード/);
+r=await call(api,{headers});assert.equal(r.status,200);const {data}=await r.json();
+// Save the same data only; no customer records or sample projects are inserted.
+const requestId=crypto.randomUUID(),body=JSON.stringify({requestId,expectedVersion:data.version,data});
+r=await call(api,{method:'POST',headers,body});assert.equal(r.status,200);const saved=(await r.json()).data;assert.equal(saved.version,data.version+1);
+r=await call(api,{method:'POST',headers,body});assert.equal(r.status,200);assert.equal((await r.json()).data.version,saved.version);
+r=await call(api,{method:'POST',headers,body:JSON.stringify({requestId:crypto.randomUUID(),expectedVersion:data.version,data})});assert.equal(r.status,409);
+r=await call(api,{method:'POST',headers:{...headers,origin:'https://foreign.example'},body});assert.equal(r.status,403);
+r=await call(api,{headers});assert.equal((await r.json()).data.version,saved.version);
+r=await call('/logout',{method:'POST',headers});assert.equal(r.status,303);assert.match(r.headers.get('set-cookie'),/Max-Age=0/);
+console.log('PASS: login, protected assets/API, D1 save/reload, retry, stale update, CSRF, logout');

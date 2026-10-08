@@ -6,15 +6,16 @@ import {digest,readDocument} from './storage.ts';
 import {documentId} from './business-scope.ts';
 import {emptyBusiness} from '../lib/marketing-business/types.ts';
 import {validDate} from '../lib/analytics/model.ts';
+import {businessColumns,decodeBusiness,isBusinessKind,type BusinessSummary} from '../lib/business.ts';
 const json=(data:unknown,status=200)=>Response.json(data,{status});
-export async function visibleBusinesses(env:Env,user:Identity){const rows=(await env.DB.prepare('SELECT id,name,created_at FROM businesses WHERE company_id=? ORDER BY created_at,id').bind(user.companyId).all<{id:string;name:string;created_at:string}>()).results;return user.role==='owner'?rows:rows.filter(b=>user.grants.some(g=>g.businessId===b.id));}
+export async function visibleBusinesses(env:Env,user:Identity){const rows=(await env.DB.prepare(`SELECT ${businessColumns},created_at FROM businesses WHERE company_id=? AND archived_at IS NULL ORDER BY created_at,id`).bind(user.companyId).all<BusinessSummary&{created_at:string}>()).results.map(decodeBusiness);return user.role==='owner'?rows:rows.filter(b=>user.grants.some(g=>g.businessId===b.id));}
 export async function company(r:Request,env:Env,user:Identity){
  if(r.method!=='GET')return json({error:'操作できません。'},405);
- const q=new URL(r.url).searchParams,today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Tokyo'}),start=q.get('start')??today.slice(0,7)+'-01',end=q.get('end')??today;
- if(!validDate(start)||!validDate(end)||start>end)return json({error:'期間を確認してください。'},400);
+ const q=new URL(r.url).searchParams,today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Tokyo'}),start=q.get('start')??today.slice(0,7)+'-01',end=q.get('end')??today,kind=q.get('kind');
+ if(!validDate(start)||!validDate(end)||start>end||kind!==null&&!isBusinessKind(kind))return json({error:'期間または事業種別を確認してください。'},400);
  const profile=await env.DB.prepare('SELECT id,name FROM companies WHERE id=?').bind(user.companyId).first();
  const rows=[];
- for(const b of await visibleBusinesses(env,user)){
+ for(const b of (await visibleBusinesses(env,user)).filter(b=>kind===null||b.kind===kind)){
  const access=permission(user,b.id,'analytics');const projects=access?.projects??null;
  let metrics:CompanyMetrics|null=null;
  let daily:CompanyDay[]|null=null;

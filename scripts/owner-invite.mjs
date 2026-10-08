@@ -1,24 +1,24 @@
-// Run by the deployment operator. No public endpoint can issue an owner invitation.
-import {d1Json} from './d1-json.mjs';
+// Operator-only invitation for this new installation. No public endpoint issues owner credentials.
+import {Client} from 'pg';
 import {randomBytes,createHash} from 'node:crypto';
-import {spawnSync} from 'node:child_process';
 import {mkdirSync,writeFileSync,chmodSync} from 'node:fs';
 import {resolve} from 'node:path';
-const local=process.argv.includes('--local'),recover=process.argv.includes('--recover');
-const database=process.env.D1_DATABASE;
-if(!database||!/^[-a-zA-Z0-9_]+$/.test(database))throw new Error('D1_DATABASE に自分のデータベース名を設定してください。');
-const base=local?'http://127.0.0.1:8787':process.env.APP_URL;
-if(!base||(!local&&(!base.startsWith('https://')||new URL(base).origin!==base)))throw new Error('APP_URL に自分の公開先の HTTPS origin を設定してください。');
-mkdirSync('.data',{recursive:true,mode:0o700});
-function execute(sql,read=false){const path=resolve('.data/owner-invite.sql');writeFileSync(path,sql,{mode:0o600});chmodSync(path,0o600);const result=spawnSync('npx',['wrangler','d1','execute',database,local?'--local':'--remote',...(read?['--command',sql]:['--file',path]),'--json'],{encoding:'utf8'});if(result.status!==0)throw new Error('登録リンクのDB処理に失敗しました。設定・接続を確認してください。');return d1Json(result.stdout);}
-const results=execute("SELECT id FROM users WHERE role='owner' AND company_id='company';",true);
-const exists=results.some(r=>r.results?.length);
-if(exists&&!recover)throw new Error('全体管理者は登録済みです。本人の復旧には --recover を指定してください。');
-if(!exists&&recover)throw new Error('復旧する全体管理者がいません。初回登録リンクを発行してください。');
-const token=randomBytes(32).toString('hex'),hash=createHash('sha256').update(token).digest('hex'),expires=Date.now()+48*3600000,now=new Date().toISOString();
-execute(`UPDATE invitations SET revoked=1 WHERE role='owner' AND used_by IS NULL;
-INSERT INTO invitations(token_hash,company_id,email,role,kind,target_id,expires,created_at)
-${recover?`SELECT '${hash}',company_id,email,'owner','reset',id,${expires},'${now}' FROM users WHERE role='owner' AND company_id='company'`:`SELECT '${hash}','company',NULL,'owner','enroll',NULL,${expires},'${now}' WHERE NOT EXISTS(SELECT 1 FROM users WHERE role='owner' AND company_id='company')`};`);
-const link=base+'/join#token='+token,path=resolve(local?'.data/local-owner-registration.md':'.data/owner-registration.md');
-writeFileSync(path,`# あなた専用の${recover?'復旧':'初回登録'}リンク\n\n[会社ダッシュボードを${recover?'再設定':'登録'}する](${link})\n\n有効期限：${new Date(expires).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}（日本時間）\n\n一度だけ使えます。このリンクを持つ人が全体管理者を登録できるため、他の人へ渡さないでください。\n\n${recover?'登録済みのメールアドレスと新しいパスワード':'表示名、自分のメールアドレス、新しいパスワード（12文字以上）'}を入力してください。Googleログインではなく、このツール専用のアカウントです。\n\n登録後は [会社ホーム](${base}/company) と [全体管理](${base}/owner) を利用できます。メンバーの招待は全体管理から行います。\n`,{mode:0o600});chmodSync(path,0o600);
-console.log('専用リンクを保存しました：'+path);
+const connection=process.env.ASTRA_BACKUP_DB_URL,base=process.env.APP_URL,recover=process.argv.includes('--recover');
+if(!connection||!base||!base.startsWith('https://')||new URL(base).origin!==base)throw new Error('Set ASTRA_BACKUP_DB_URL and your HTTPS APP_URL');
+const db=new Client({connectionString:connection,ssl:{rejectUnauthorized:true}});
+try{
+ await db.connect();await db.query('SET search_path=astra,extensions,pg_catalog');
+ await db.query('BEGIN');
+ const {rows}=await db.query("SELECT id,email FROM users WHERE role='owner' AND company_id='company' FOR UPDATE");
+ if(rows.length&&!recover)throw new Error('Owner already registered; use --recover only for that owner');
+ if(!rows.length&&recover)throw new Error('No owner to recover');
+ if(rows.length>1)throw new Error('Multiple owners require individual recovery');
+ const token=randomBytes(32).toString('hex'),hash=createHash('sha256').update(token).digest('hex'),now=new Date().toISOString();
+ await db.query("UPDATE invitations SET revoked=1 WHERE role='owner' AND used_by IS NULL");
+ await db.query('INSERT INTO invitations(token_hash,company_id,email,role,kind,target_id,expires,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[hash,'company',rows[0]?.email??null,'owner',recover?'reset':'enroll',rows[0]?.id??null,Date.now()+48*3600000,now]);
+ await db.query('COMMIT');
+ mkdirSync('.data',{recursive:true,mode:0o700});chmodSync('.data',0o700);
+ const path=resolve('.data/owner-registration.md');
+ writeFileSync(path,`# Owner registration\n\n${base}/join#token=${token}\n\nPrivate, single use, expires in 48 hours. Do not share or commit.\n`,{mode:0o600});chmodSync(path,0o600);
+ console.log('Private owner link saved to .data/owner-registration.md');
+}catch{try{await db.query('ROLLBACK');}catch{}console.error('Owner invitation failed. Check your installation connection and owner state.');process.exitCode=1;}finally{await db.end();}

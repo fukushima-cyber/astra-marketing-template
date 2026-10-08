@@ -1,0 +1,14 @@
+SET search_path=astra,pg_catalog;
+CREATE INDEX access_grants_business ON access_grants(business_id);
+CREATE INDEX ad_accounts_business ON ad_accounts(business_id);
+CREATE INDEX ad_changes_account ON ad_changes(account_id);
+CREATE INDEX analytics_rows_import ON analytics_rows(import_id);
+CREATE INDEX autonomy_actions_job ON autonomy_actions(job_id);
+CREATE INDEX autonomy_settings_owner ON autonomy_settings(owner_id);
+CREATE INDEX invitations_company ON invitations(company_id);
+CREATE INDEX invitations_creator ON invitations(created_by);
+CREATE INDEX invitations_target ON invitations(target_id);
+CREATE INDEX invitations_user ON invitations(used_by);
+CREATE INDEX oauth_states_invite ON oauth_states(invite_hash);
+CREATE INDEX user_sessions_user ON user_sessions(user_id);
+RESET search_path;

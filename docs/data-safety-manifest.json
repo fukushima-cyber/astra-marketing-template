@@ -1,0 +1,29 @@
+{
+  "provider": "supabase",
+  "supabase": {
+    "projectId": "YOUR_SUPABASE_PROJECT_ID",
+    "schema": "astra",
+    "hyperdriveId": "00000000000000000000000000000000",
+    "migrations": {
+      "20261005180904_astra_database.sql": "14adc320e28cb30dc477186e621950912888c06348dc4f463ab1a15921259e76",
+      "20261005181950_astra_foreign_key_indexes.sql": "9664b5cc986222f14ac24c2d99bca117fabf89a71a537a0f4d4bc8ffc498b579",
+      "20261005195542_dashboard_journey_and_revisions.sql": "92aa98879dc76e86bc6a808e03f37579aef62eeef4aa9bfee1912d3d7d384348"
+    }
+  },
+  "migrations": {
+    "0001_initial.sql": "7632c3113797bfafad6b5d2ae04b947a620276232bdc242a6ce10a44e8462e24",
+    "0002_analytics.sql": "eb6f7e16c8c813012aa29b9031c16095dd344c14afd3d01b4bfc1444c7173e44",
+    "0003_businesses_native.sql": "1ec07904439319cdfd0cdff8b544c3a501c8c6cee3c8cc6c5182c2802170bec7",
+    "0004_company_identity.sql": "1552a1c59d69842eb08e379aa136c0c7d845aa5baeb4be95d3f2a82606bd9c75",
+    "0005_ads.sql": "1f9604a2c55e192619b6af5fa38eb29fb0f63358ce8d5f64fac2b5523372bd67",
+    "0006_autonomy.sql": "75dc8485d74160a58f79371bade1357997a13347c1ef995facd1de03649d6138",
+    "0007_affiliate_business.sql": "429dd3d493bd9a87a3edf907f070615a3f624a848b7fef6938b68d2d0f7348a7",
+    "0008_business_kind.sql": "ab5f959f035756e0d80e32a649f35e6f2129ffb02ea2011e13b0a4a7174cb94a",
+    "0009_normalize_business_kind.sql": "0c24d3d9789179ec21c439716a2290ab7778b22880ae183728b7e9dc1d3a4e65",
+    "0010_business_archiving.sql": "13896f8823840fe002454b44623abe8409d639e46b190bc6ec12ee77d0bab710",
+    "0011_google_login.sql": "81d6153ab3aa472b3a58c939b2ea479d17baa05428a4dccdb0a617fd87056ea5",
+    "0012_google_staff_invites.sql": "3b591214385fa15a1f9a4b61ab536ab1f5bc0ce84a11f08ed2741ef21ceb5887",
+    "0013_business_strategy.sql": "a384f139070bcc1675af4501386e3334a3bda2d283fe3daa04ff71d646bf2ee8",
+    "0014_ad_reporting.sql": "f16b4e63eeda7c63c0643b14058a2319cffa9cf85a6b327fe22e2034426526b6"
+  }
+}

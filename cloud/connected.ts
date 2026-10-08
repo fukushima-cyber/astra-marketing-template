@@ -1,3 +1,4 @@
+import {pageStatements,cachedPages} from './native-pages.ts';
 import type {Env} from './types.ts';
 import {readDocument,commitDocument,digest,Conflict} from './storage.ts';
 import {documentId} from './business-scope.ts';
@@ -33,9 +34,8 @@ export async function connected(r:Request,env:Env,scope='default'){
  if(!validDate(start)||!validDate(end)||start>end||(Date.parse(end)-Date.parse(start))/86400000>89)return json({error:'90日以内の期間を選んでください。'},400);
  const c=(await listConnections(env,scope)).find(c=>JSON.parse(c.targets).some((t:Target)=>c.id+':'+t.id===groupId));
  if(!c)return json({error:'この事業にファネルが見つかりません。'},404);
- if(!c.enabled)return json({error:'データ接続で収集を再開してください。'},400);
  const id=(JSON.parse(c.targets) as Target[]).find(t=>c.id+':'+t.id===groupId)!.id;
- try{return json({pages:await pagesFor(env,c,id,start,end),failures:[],collectedAt:new Date().toISOString()});}catch{return json({error:'UTAGEから取得できませんでした。データ接続でキーと読取権限を確認してください。'},502);}
+ try{if(!c.enabled)throw new Error('paused');const pages=await pagesFor(env,c,id,start,end),at=new Date().toISOString();await env.DB.batch(pageStatements(env,c,id,start,end,pages,at));return json({pages,failures:[],collectedAt:at,cached:false});}catch{const saved=await cachedPages(env,c,id,start,end);return saved?json(saved):json({error:'UTAGEから取得できず、この期間の保存済み明細もありません。接続と読取権限を確認してください。'},502);}
  }
  return json({error:'操作が見つかりません。'},404);
 }

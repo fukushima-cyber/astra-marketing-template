@@ -1,8 +1,8 @@
 export type Level='campaign'|'adset'|'ad';
 export const levels:Record<Level,string>={campaign:'キャンペーン',adset:'広告セット',ad:'広告'};
-export const statuses:Record<string,string>={ACTIVE:'配信設定中',PAUSED:'停止',DELETED:'削除済み',ARCHIVED:'保管済み',PENDING_REVIEW:'審査中',DISAPPROVED:'不承認',CAMPAIGN_PAUSED:'キャンペーン停止中',ADSET_PAUSED:'広告セット停止中',WITH_ISSUES:'要確認',IN_PROCESS:'処理中'};
+export const statuses:Record<string,string>={UNAVAILABLE:'今回の一覧に未掲載',ACTIVE:'配信設定中',PAUSED:'停止',DELETED:'削除済み',ARCHIVED:'保管済み',PENDING_REVIEW:'審査中',DISAPPROVED:'不承認',CAMPAIGN_PAUSED:'キャンペーン停止中',ADSET_PAUSED:'広告セット停止中',WITH_ISSUES:'要確認',IN_PROCESS:'処理中'};
 export const changeStates:Record<string,string>={draft:'確認待ち',approved:'実行待ち',sending:'実行中・結果確認待ち',succeeded:'反映確認済み',failed:'実行できませんでした',uncertain:'反映結果が不明',cancelled:'取り消し'};
-export type Entity={id:string;accountId:string;name:string;level:Level;campaignId:string;adsetId:string;status:string;effectiveStatus:string;dailyBudget:number|null;lifetimeBudget:number|null;updatedTime:string;funnelId?:string};
+export type Entity={id:string;accountId:string;name:string;level:Level;campaignId:string;adsetId:string;status:string;effectiveStatus:string;dailyBudget:number|null;lifetimeBudget:number|null;updatedTime:string;funnelId?:string;syncMissing?:boolean;creative?:{id:string;name:string;thumbnailUrl?:string;imageUrl?:string;videoId?:string}};
 export type Policy={autonomousOperations?:('pause'|'resume'|'budget')[];enabled:boolean;maxDailyBudget:number;maxChangePercent:number;maxOperations:number};
 export const defaultPolicy:Policy={enabled:false,maxDailyBudget:0,maxChangePercent:20,maxOperations:3};
 export type Change={entity:Entity;field:'status'|'daily_budget';before:string|number;after:string|number;reason:string;caseId:string;policyVersion:number;currency:string};

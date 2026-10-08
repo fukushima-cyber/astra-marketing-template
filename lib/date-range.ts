@@ -7,3 +7,9 @@ export function presetRange(key:keyof typeof rangeNames,today=japanToday()):Date
 export const validRange=(r:DateRange)=>validDate(r.start)&&validDate(r.end)&&r.start<=r.end;
 export function initialRange():DateRange{if(typeof window==='undefined')return presetRange('month');const q=new URLSearchParams(location.search),r={start:q.get('start')??'',end:q.get('end')??''};return validRange(r)?r:presetRange('month');}
 export function rememberRange(r:DateRange){const u=new URL(location.href);u.searchParams.set('start',r.start);u.searchParams.set('end',r.end);history.replaceState(null,'',u);}
+
+export function selectedPreset(value:DateRange,today:string,preferred?:keyof typeof rangeNames|'custom'){
+ if(preferred==='custom')return null;
+ const matches=(key:keyof typeof rangeNames)=>{const r=presetRange(key,today);return r.start===value.start&&r.end===value.end;};
+ return preferred&&matches(preferred)?preferred:(Object.keys(rangeNames) as (keyof typeof rangeNames)[]).find(matches)??null;
+}

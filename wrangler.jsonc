@@ -26,12 +26,18 @@
     }
   ],
   "preview_urls": false,
-  "d1_databases": [
+  "hyperdrive": [
     {
-      "binding": "DB",
-      "database_name": "astra-marketing-template",
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "migrations"
+      "binding": "SUPABASE",
+      "id": "00000000000000000000000000000000"
     }
+  ],
+  "vars": {
+    "DB_PROVIDER": "supabase",
+    "ASTRA_MAINTENANCE": "0",
+    "ASTRA_MIGRATION_ENABLED": "0"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
   ]
 }

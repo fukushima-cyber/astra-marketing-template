@@ -1,0 +1,4 @@
+CREATE TABLE journey_events(id TEXT PRIMARY KEY,business_id TEXT NOT NULL REFERENCES businesses(id),project_id TEXT NOT NULL,source_id TEXT NOT NULL,external_id TEXT NOT NULL,day TEXT NOT NULL,lead_id TEXT NOT NULL,signature TEXT NOT NULL,data TEXT NOT NULL,supersedes TEXT UNIQUE REFERENCES journey_events(id),UNIQUE(business_id,source_id,external_id));
+CREATE TABLE document_revisions(document_id TEXT NOT NULL,version INTEGER NOT NULL,data TEXT NOT NULL,at TEXT NOT NULL,PRIMARY KEY(document_id,version));
+CREATE TRIGGER capture_document_insert AFTER INSERT ON documents WHEN NEW.data <> 'null' BEGIN INSERT OR IGNORE INTO document_revisions VALUES(NEW.id,NEW.version,NEW.data,strftime('%Y-%m-%dT%H:%M:%fZ','now')); END;
+CREATE TRIGGER capture_document_update AFTER UPDATE ON documents WHEN NEW.data <> 'null' BEGIN INSERT OR IGNORE INTO document_revisions VALUES(NEW.id,NEW.version,NEW.data,strftime('%Y-%m-%dT%H:%M:%fZ','now')); END;
